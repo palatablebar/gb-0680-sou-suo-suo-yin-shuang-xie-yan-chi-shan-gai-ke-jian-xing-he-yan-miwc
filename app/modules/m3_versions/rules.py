@@ -2,6 +2,7 @@ from collections import defaultdict
 import json
 from app.reasons import reject,sources
 from app.values import number
+from app.rebody import materialize
 def signature(row):return json.dumps([row["op"],row.get("document")],sort_keys=True,ensure_ascii=False)
 def evaluate(rows,context):
     grouped=defaultdict(list);good=[];bad=[]
@@ -17,4 +18,11 @@ def evaluate(rows,context):
             bad.extend(reject(e,"UNRESOLVED_VERSION","当前文档存在版本冲突") for e in events);continue
         winner=max(events,key=lambda e:number(e["version"]))
         good.append({**winner,"_sources":[n for e in events for n in sources(e)],"superseded_versions":sorted([e["version"] for e in events if e is not winner],key=number),"tombstone":winner["op"]=="delete"})
-    return {"rows":good,"quarantine":bad,"metrics":{"states":len(good),"tombstones":sum(r["tombstone"] for r in good),"conflict_rows":len(bad)}}
+    # 字段级修订正文裁决：按 (文档,端) 从可追溯基线重放整条版本链。
+    # 注意重放输入是 M2 全部采纳事件，而非仅最高版本胜出行，
+    # 否则未在本批胜出行提及的字段会丢失、撤下字段会回流。
+    # 同版冲突已由上方 M3 循环隔离，这里只取裁决正文与专属指标，不重复入隔离。
+    bodies,_body_bad,body_metrics=materialize(rows)
+    metrics={"states":len(good),"tombstones":sum(r["tombstone"] for r in good),"conflict_rows":len(bad)}
+    metrics.update(body_metrics)
+    return {"rows":good,"bodies":bodies,"quarantine":bad,"metrics":metrics}

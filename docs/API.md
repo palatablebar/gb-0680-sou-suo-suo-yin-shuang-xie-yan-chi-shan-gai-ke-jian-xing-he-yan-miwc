@@ -1,3 +1,5 @@
 # 接口
 
 模块GET使用仓内样例，模块POST可传csv或rows与context，直接计算当前规则。/api/runs使用完整流水线并原子保存。每个阶段返回rows、quarantine、metrics；后续阶段还返回累计隔离。/api/upload接收multipart文件file。/api/runs/<id>/archive只导出一份带清单与证据的CSV。
+
+M3阶段额外返回bodies：每个(doc_id,side)一条正文裁决，字段含body_state(CANONICAL/TOMBSTONE/BLOCKED)、canonical_body、baseline_version、replayed_versions、block_reason(NO_BASELINE/VERSION_GAP/SAME_VERSION_CONFLICT)、block_detail、body_sources。M4行透传source_canonical_body/index_canonical_body与index_extra_fields/index_missing_fields/index_changed_fields；M7 metrics含body_sha256。op=patch时payload为仅含改动字段的JSON对象，null表示撤下该字段。

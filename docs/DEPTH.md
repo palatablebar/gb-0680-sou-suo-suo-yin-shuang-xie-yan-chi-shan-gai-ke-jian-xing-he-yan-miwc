@@ -31,10 +31,22 @@
 | TRAP-09 | 超大版本 | JSON精度损失 | 文本序列化 | `app/values.py` | `tests/test_m2.py::test_large_version_precise` |
 | TRAP-13 | 删除后迟到旧写 | 文档复活 | 最大版本墓碑 | `app/modules/m3_versions/rules.py` | `tests/test_m3.py::test_tombstone_beats_late_old_write` |
 | TRAP-23 | 延迟阈值边界 | 多判延迟 | 等于阈值通过 | `app/modules/m5_latency/rules.py` | `tests/test_m5.py::test_threshold_equal_pass` |
+| TRAP-30 | 补丁乱序直接盖索引 | 已撤字段回流 | 按版本序从基线重放整条链 | `app/rebody.py` | `tests/test_rebody.py::test_out_of_order_patches_replay_by_version` |
+| TRAP-31 | 只按本次改动重建 | 未提及字段丢失 | 基线快照+全链重放 | `app/rebody.py` | `tests/test_rebody.py::test_field_tombstone_does_not_resurrect` |
+| TRAP-32 | 补丁无基线 | 猜测正文 | NO_BASELINE阻断保留原状态 | `app/rebody.py` | `tests/test_rebody.py::test_rebuild_from_patch_only_loses_nothing_but_needs_baseline` |
+| TRAP-33 | 版本链断裂仍套用 | 脏正文上线 | VERSION_GAP冻结上一可用正文 | `app/rebody.py` | `tests/test_rebody.py::test_version_gap_freezes_last_good_body` |
+| TRAP-34 | 同版修订冲突回落旧版 | 静默选错 | 整主体阻断不回落 | `app/rebody.py` | `tests/test_rebody.py::test_same_version_conflict_blocks_whole_subject` |
 
 ## 对账规则
 
 输入原始逻辑行=最终采纳来源行+隔离来源行+重复行+空白行+分段表头。派生记录用_sources保存完整来源，因此分组不丢行。业务预期合计与上游申报合计之差等于逐行差异之和。结果按输入摘要、规则版本及参数产生唯一批次，事务写入；同源重跑只复用已有批次。
+
+## 正文裁决不变量
+
+- 唯一来源：canonical_body 只在 `app/rebody.py` 产生一次，M4 差异、M5 门禁、M7 归档与页面表格均读取同一份结果，归档侧不二次重建。
+- 形成条件：存在可追溯 upsert 基线且基线到链首整数版本连续、无同版冲突；否则 BLOCKED 并保留原状态，阻断原因 NO_BASELINE / VERSION_GAP / SAME_VERSION_CONFLICT 随主体透传。
+- 乱序无关：重放按 (version, event_id) 排序，同批事件任意排列裁决结果相同；run_id 由输入 sha256+参数+规则版本决定，重放同一批不新增批次、不改换正文。
+- 字段三态：patch 提及字段按值覆盖，null 撤下，未提及保持；撤下字段不会被迟到旧补丁带回，未提及字段不会因只重建本批而丢失。
 
 ## 已知不覆盖
 

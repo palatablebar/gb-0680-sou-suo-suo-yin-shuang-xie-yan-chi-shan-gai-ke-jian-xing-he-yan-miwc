@@ -9,9 +9,10 @@ def evaluate(rows,context):
         source=instant(row["source_at"]);visible=instant(row["visible_at"]) if row.get("visible_at") else None
         delay=max(Decimal(0),Decimal(str(((visible or as_of)-source).total_seconds())))
         state=row["visibility_state"]
-        if state in {"MISSING_INDEX","DELETE_NOT_CONFIRMED"}:gate="缺失" if delay>threshold else "等待"
+        if row.get("body_blocked"):gate="正文阻断"
+        elif state in {"MISSING_INDEX","DELETE_NOT_CONFIRMED"}:gate="缺失" if delay>threshold else "等待"
         elif state!="CONSISTENT":gate="内容差异"
         elif delay>threshold:gate="延迟"
         else:gate="通过"
         out.append({**row,"delay_seconds":str(delay),"gate":gate,"threshold_seconds":str(threshold),"expected":"1","reported":"1" if gate=="通过" else "0"})
-    return {"rows":out,"quarantine":[],"metrics":{"pass":sum(r["gate"]=="通过" for r in out),"delayed":sum(r["gate"]=="延迟" for r in out),"missing":sum(r["gate"]=="缺失" for r in out),"waiting":sum(r["gate"]=="等待" for r in out),"mismatch":sum(r["gate"]=="内容差异" for r in out)}}
+    return {"rows":out,"quarantine":[],"metrics":{"pass":sum(r["gate"]=="通过" for r in out),"delayed":sum(r["gate"]=="延迟" for r in out),"missing":sum(r["gate"]=="缺失" for r in out),"waiting":sum(r["gate"]=="等待" for r in out),"mismatch":sum(r["gate"]=="内容差异" for r in out),"body_blocked":sum(r["gate"]=="正文阻断" for r in out)}}
